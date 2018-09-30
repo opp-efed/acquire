@@ -1,2 +1,2 @@
 # acquire
-APIs for acquiring environmental data
+Tools for acquiring and manipulating data from external sources
