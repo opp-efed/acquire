@@ -4,14 +4,98 @@ Created on Wed Jul 18 08:46:24 2018
 
 @author: mweber
 """
+
+#======================
+# imports
+#======================
+
 import pandas as pd
 import glob
 import os
 from scipy import stats
+import tkinter as tk
+from tkinter import ttk
+from tkinter.filedialog import askdirectory
 
-def my_csv_reader(path):
-    d = pd.read_csv(path, skiprows=5,header=None, names=["Daily Depth (m)", "avg","pore water", "peak"])
-    d['Date'] = pd.date_range(start='1/1/1961', end='12/31/1990')  # an example of a column to be added to each dataframe
+path = []
+
+def Choose_Path():    
+    tk.Tk().withdraw()
+    path.append(askdirectory())
+    
+def CloseGUI():
+    win.quit()
+    win.destroy()
+
+win = tk.Tk()   
+
+# Add a title to gui      
+win.title("PWC Non-Ag Post-Processor Inputs")
+
+# Get directory
+browser = ttk.Button(win, text = "Select main directory of PWC files", command=Choose_Path)
+browser.grid(column=0, row=0,sticky=tk.W, pady=10)
+
+# Get output directory
+browser = ttk.Button(win, text = "Choose output directory", command=Choose_Path)
+browser.grid(column=0, row=1,sticky=tk.W, pady=10)
+
+# Get Preface
+PrefaceLabel = ttk.Label(win, text="Add preface to timeseries names")
+PrefaceLabel.grid(column=0, row=2)
+Preface = tk.StringVar()
+PrefaceEntered = ttk.Entry(win, width=12, textvariable=Preface)
+PrefaceEntered.grid(column=1, row=2)
+
+# Checkboxes for Impervious, Residential, ROW
+chImp = tk.IntVar()
+check1 = tk.Checkbutton(win, text="Include Impervious Runs?", variable=chImp, state='active')
+check1.select()
+check1.grid(column=0, row=3, sticky=tk.W)                   
+
+chRes = tk.IntVar()
+check2 = tk.Checkbutton(win, text="Include Residential Runs?", variable=chRes, state='active')
+check2.select()
+check2.grid(column=1, row=3, sticky=tk.W)                   
+
+chRow = tk.IntVar()
+check3 = tk.Checkbutton(win, text="Include ROW Runs?", variable=chRow, state='active')
+check3.select()
+check3.grid(column=2, row=3, sticky=tk.W) 
+
+
+# Area Fractions for Impervious, Residential, ROW
+labelsFrame1 = ttk.LabelFrame(win) 
+labelsFrame1.grid(column=0, row=4)
+AreaFracLab1 = ttk.Label(labelsFrame1, text="Area fraction")
+AreaFracLab1.grid(column=0, row=0, sticky=tk.W)
+AreaFrac1 = tk.StringVar()
+nameEntered = ttk.Entry(labelsFrame1, width=5, textvariable=AreaFrac1)
+nameEntered.grid(column=1, row=0, sticky=tk.W)
+
+labelsFrame2 = ttk.LabelFrame(win) 
+labelsFrame2.grid(column=1, row=4)
+AreaFracLab2 = ttk.Label(labelsFrame2, text="Area fraction")
+AreaFracLab2.grid(column=0, row=0, sticky=tk.W)
+AreaFrac2 = tk.StringVar()
+nameEntered = ttk.Entry(labelsFrame2, width=5, textvariable=AreaFrac2)
+nameEntered.grid(column=1, row=0, sticky=tk.W)
+
+labelsFrame3 = ttk.LabelFrame(win) # 1
+labelsFrame3.grid(column=2, row=4)
+AreaFracLab3 = ttk.Label(labelsFrame3, text="Area fraction")
+AreaFracLab3.grid(column=0, row=0, sticky=tk.W)
+AreaFrac3 = tk.StringVar()
+nameEntered = ttk.Entry(labelsFrame3, width=5, textvariable=AreaFrac3)
+nameEntered.grid(column=1, row=0, sticky=tk.W)
+
+b1 = ttk.Button(win, text='Submit', command = CloseGUI).grid(column=1, sticky=tk.S)
+win.mainloop()
+
+
+def my_csv_reader(path, start_date, end_date, input_cols):
+    d = pd.read_csv(path, skiprows=5,header=None, names=input_cols)
+    d['Date'] = pd.date_range(start=start_date, end=end_date)  # an example of a column to be added to each dataframe
     return d
 
 def get_n_largest(matrix, n):
@@ -20,21 +104,35 @@ def get_n_largest(matrix, n):
 def main():
     # Input paths and variables
 #    input_dir = 'H:/WorkingData/OPP_Detail/ExcelMacro/InputTables'
-    input_dir = 'H:/WorkingData/OPP_Detail/ExcelMacro/support files/step 2'
+    input_dir = path[0]
+    output_dir = path[1]
+    start_date = '1/1/1961'
+    end_date = '12/31/1990'
+    input_cols = ["Daily Depth (m)", "avg","pore water", "peak"]
+    Area_fractions = [float(AreaFrac1.get()), float(AreaFrac2.get()), float(AreaFrac3.get())] # Add more flexibility later
+    Bins = ['2','4','7']
+    Scenarios = []
+    if chImp.get() == 1:
+        Scenarios.append('Impervious')
+    if chRes.get() == 1:
+        Scenarios.append('Residential')
+    if chRow.get() == 1:
+        Scenarios.append('ROW')
+        
     filenames = [f for f in os.listdir(input_dir) if f.count('run')]
     hucs = [h.split('_')[3][-1:] for h in filenames]
     hucs = list(set([huc for huc in hucs]))
-    Area_fractions = [1,1,1] # Add more flexibility later
+    
     # Loop through HUCs and create separate excel file for each HUC output
     for HUC in hucs:
-        outfile = 'H:/WorkingData/OPP_Detail/testProcessed_python_HUC_' + HUC + '.xlsx'
+        outfile = output_dir + '/testProcessed_python_HUC_' + HUC + '.xlsx'
         writer = pd.ExcelWriter(outfile, engine='xlsxwriter')
         # Loop through Bin values and create separate worksheet for each bin
-        for Bin in ['2','4','7']:
+        for Bin in Bins:
             # Loop through the three scenarios for each Bin worksheet
-            for Scenario in ['Impervious','Residential','ROW']:  # Add more flexibility later             
+            for Scenario in Scenarios:  # Add more flexibility later             
                 print('on HUC ' + HUC + ' on Bin ' + Bin + ' and Scenario ' + Scenario)
-                df = pd.concat([my_csv_reader(f) for f in glob.glob(input_dir + '/*_' + Bin + '_' + Scenario + 'ESA' + HUC + '*.csv')])
+                df = pd.concat([my_csv_reader(f, start_date, end_date, input_cols) for f in glob.glob(input_dir + '/*_' + Bin + '_' + Scenario + 'ESA' + HUC + '*.csv')])
                 # convert from kg/m3 to ppm
                 df[["avg","pore water", "peak"]] = df[["avg","pore water", "peak"]] * 1000
                 df = df.groupby('Date')["avg","pore water", "peak"].mean()
